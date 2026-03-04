@@ -247,3 +247,10 @@ app_license = "mit"
 # List of apps whose translatable strings should be excluded from this app's translations.
 # ignore_translatable_strings_from = []
 
+scheduler_events = {
+    "cron": {
+        "*/2 * * * *": [
+            "resume_evaluator.api.score_resume.process_all_unprocessed"
+        ]
+    }
+}
