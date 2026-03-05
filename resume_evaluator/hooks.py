@@ -249,7 +249,7 @@ app_license = "mit"
 
 scheduler_events = {
     "cron": {
-        "*/2 * * * *": [
+        "*/1 * * * *": [
             "resume_evaluator.api.score_resume.process_all_unprocessed"
         ]
     }
