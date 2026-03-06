@@ -83,7 +83,7 @@ def score_resume_text(client, provider, model, resume_text, job_description):
         summary = data.get("summary", "")[:summary_max_length]
 
         if score < min_score:
-            print(f"[CV Evaluator] ⚠ Score {score} is below threshold {min_score}")
+            print(f"[CV Evaluator] WARNING: Score {score} is below threshold {min_score}")
 
     except Exception as e:
         score = 0

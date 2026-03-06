@@ -70,11 +70,11 @@ def process_all_unprocessed():
             frappe.log_error(
                 f"No resume text found for {applicant_name}", "Resume Processing"
             )
-            print(f"[CV Evaluator] ⚠ Skipping {applicant_name} — no resume text.")
+            print(f"[CV Evaluator] WARNING: Skipping {applicant_name} - no resume text.")
             continue
 
         score, summary = score_resume_text(client, provider, model, resume_text, job_desc)
         update_applicant(applicant_name, score, summary)
-        print(f"[CV Evaluator] ✓ {applicant_name} → Score: {score}")
+        print(f"[CV Evaluator] OK: {applicant_name} - Score: {score}")
 
     print("[CV Evaluator] Done.")
