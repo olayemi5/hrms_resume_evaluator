@@ -13,7 +13,7 @@ def get_unprocessed_applicants():
     return frappe.get_all(
         "Job Applicant",
         filters={"custom_evaluation_done": 0},
-        fields=["name", "job_title"],
+        fields=["name", "job_title", "applicant_name", "email_id"],
     )
 
 
@@ -32,24 +32,24 @@ def update_applicant(applicant_name, score, summary):
 
 def process_all_unprocessed():
     """
-    Main task — run via:
+    Main task -- run via:
         bench execute resume_evaluator.tasks.process_all_unprocessed
     Or schedule in hooks.py.
     """
 
-    # Step 1 — Ensure the settings DocType exists
+    # Step 1 -- Ensure the settings DocType exists
     ensure_settings_doctype()
 
-    # Step 2 — Ensure custom fields exist on Job Applicant
+    # Step 2 -- Ensure custom fields exist on Job Applicant
     ensure_custom_fields()
 
-    # Step 3 — Get AI client based on configured provider
+    # Step 3 -- Get AI client based on configured provider
     client, provider, model = get_ai_client()
     if client is None:
-        print("[CV Evaluator] Aborting — AI client could not be initialized.")
+        print("[CV Evaluator] Aborting -- AI client could not be initialized.")
         return
 
-    # Step 4 — Process unprocessed applicants
+    # Step 4 -- Process unprocessed applicants
     applicants = get_unprocessed_applicants()
     if not applicants:
         print("[CV Evaluator] No unprocessed applicants found.")
@@ -60,6 +60,8 @@ def process_all_unprocessed():
     for a in applicants:
         applicant_name = a["name"]
         job_opening_name = a["job_title"]
+        full_name = a.get("applicant_name") or ""
+        email = a.get("email_id") or ""
 
         print(f"[CV Evaluator] Processing: {applicant_name}")
 
@@ -73,7 +75,12 @@ def process_all_unprocessed():
             print(f"[CV Evaluator] WARNING: Skipping {applicant_name} - no resume text.")
             continue
 
-        score, summary = score_resume_text(client, provider, model, resume_text, job_desc)
+        score, summary = score_resume_text(
+            client, provider, model,
+            resume_text, job_desc,
+            applicant_name=full_name,
+            applicant_email=email
+        )
         update_applicant(applicant_name, score, summary)
         print(f"[CV Evaluator] OK: {applicant_name} - Score: {score}")
 
