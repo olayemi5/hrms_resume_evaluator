@@ -10,6 +10,8 @@ You can install this app using the [bench](https://github.com/frappe/bench) CLI:
 cd $PATH_TO_YOUR_BENCH
 bench get-app $URL_OF_THIS_REPO --branch develop
 bench install-app resume_evaluator
+cd ~/frappe-bench
+./env/bin/pip install -r apps/resume_evaluator/requirements.txt
 ```
 
 ### Contributing
