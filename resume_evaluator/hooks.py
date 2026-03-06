@@ -250,7 +250,7 @@ app_license = "mit"
 scheduler_events = {
     "cron": {
         "*/1 * * * *": [
-            "resume_evaluator.api.score_resume.process_all_unprocessed"
+            "resume_evaluator.tasks.process_all_unprocessed"
         ]
     }
 }
