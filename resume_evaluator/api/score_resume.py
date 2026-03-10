@@ -187,7 +187,7 @@ def score_resume_text(client, provider, model, resume_text, job_description, app
         if not is_verified:
             short_title = f"Identity mismatch: {applicant_name or applicant_email}"[:140]
             frappe.log_error(title=short_title, message=reason)
-            print(f"[CV Evaluator] IDENTITY WARNING: {reason}")
+           
             return 0, "Resume could not be verified as belonging to this applicant."
 
     # --- AI Scoring ---
