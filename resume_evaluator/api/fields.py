@@ -11,18 +11,21 @@ REQUIRED_CUSTOM_FIELDS = [
         "fieldtype": "Check",
         "default": "0",
         "insert_after": "cover_letter",
+        "read_only": 1,
     },
     {
         "fieldname": "custom_match_score",
         "label": "Match Score",
         "fieldtype": "Int",
         "insert_after": "custom_evaluation_done",
+        "read_only": 1,
     },
     {
         "fieldname": "custom_match_summary",
         "label": "Match Summary",
         "fieldtype": "Small Text",
         "insert_after": "custom_match_score",
+        "read_only": 1,
     },
 ]
 
