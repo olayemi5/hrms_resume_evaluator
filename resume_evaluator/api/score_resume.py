@@ -178,7 +178,7 @@ def score_resume_text(client, provider, model, resume_text, job_description, app
     if not is_clean:
         msg = f"Prompt injection detected in resume for '{applicant_name}'. Matched: '{matched}'"
         frappe.log_error(title="Resume Security", message=msg)
-        print(f"[CV Evaluator] SECURITY: {msg}")
+       
         return 0, "Resume flagged for suspicious content and was not evaluated."
 
     # --- Security Check 2: Identity Verification ---
