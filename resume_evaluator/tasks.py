@@ -5,10 +5,6 @@ from resume_evaluator.api.extractors import get_resume_text
 from resume_evaluator.api.score_resume import score_resume_text
 
 
-# ─────────────────────────────────────────────
-# DB Helpers
-# ─────────────────────────────────────────────
-
 def get_unprocessed_applicants():
     return frappe.get_all(
         "Job Applicant",
@@ -17,71 +13,51 @@ def get_unprocessed_applicants():
     )
 
 
-def update_applicant(applicant_name, score, summary):
+def update_applicant(applicant_name, result):
     doc = frappe.get_doc("Job Applicant", applicant_name)
-    doc.custom_match_score = score
-    doc.custom_match_summary = summary
+    doc.custom_match_score = result["score"]
+    doc.custom_match_summary = result["summary"]
+    doc.custom_security_flag = result["security_flag"]
+    doc.custom_security_note = result["security_note"]
+    doc.custom_skills = result["skills"]
+    doc.custom_education = result["education"]
+    doc.custom_years_of_experience = result["years_of_experience"]
+    doc.custom_previous_employments = result["previous_employments"]
+    doc.custom_referees = result["referees"]
+    doc.custom_other_insights = result["other_insights"]
     doc.custom_evaluation_done = 1
     doc.save(ignore_permissions=True)
     frappe.db.commit()
 
 
-# ─────────────────────────────────────────────
-# Main Entry Point
-# ─────────────────────────────────────────────
-
 def process_all_unprocessed():
-    """
-    Main task -- run via:
-        bench execute resume_evaluator.tasks.process_all_unprocessed
-    Or schedule in hooks.py.
-    """
-
-    # Step 1 -- Ensure the settings DocType exists
+    """Scheduled task: evaluate all unevaluated Job Applicant resumes."""
     ensure_settings_doctype()
-
-    # Step 2 -- Ensure custom fields exist on Job Applicant
     ensure_custom_fields()
 
-    # Step 3 -- Get AI client based on configured provider
     client, provider, model = get_ai_client()
     if client is None:
-        print("[CV Evaluator] Aborting -- AI client could not be initialized.")
         return
 
-    # Step 4 -- Process unprocessed applicants
     applicants = get_unprocessed_applicants()
     if not applicants:
-        print("[CV Evaluator] No unprocessed applicants found.")
         return
-
-    print(f"[CV Evaluator] Found {len(applicants)} applicant(s) to process.")
 
     for a in applicants:
         applicant_name = a["name"]
         job_opening_name = a["job_title"]
-        full_name = a.get("applicant_name") or ""
-        email = a.get("email_id") or ""
-
-        print(f"[CV Evaluator] Processing: {applicant_name}")
 
         job_desc = frappe.get_value("Job Opening", job_opening_name, "description") or ""
 
         resume_text = get_resume_text(applicant_name)
         if not resume_text.strip():
-            frappe.log_error(
-                f"No resume text found for {applicant_name}", "Resume Processing"
-            )
-            print(f"[CV Evaluator] WARNING: Skipping {applicant_name} - no resume text.")
+            frappe.log_error(f"No resume text found for {applicant_name}", "Resume Processing")
             continue
 
-        score, summary = score_resume_text(
+        result = score_resume_text(
             client, provider, model,
             resume_text, job_desc,
-            applicant_name=full_name,
-            applicant_email=email
+            applicant_name=a.get("applicant_name") or "",
+            applicant_email=a.get("email_id") or "",
         )
-        update_applicant(applicant_name, score, summary)
-        print(f"[CV Evaluator] OK: {applicant_name} - Score: {score}")
-
-    print("[CV Evaluator] Done.")
+        update_applicant(applicant_name, result)
