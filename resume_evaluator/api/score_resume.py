@@ -172,10 +172,8 @@ def score_resume_text(
     try:
         settings_name = frappe.db.get_value("Cv Evaluator Settings", {}, "name")
         settings = frappe.get_doc("Cv Evaluator Settings", settings_name)
-        summary_max_length = int(settings.summary_max_length or 1000)
         min_score = int(settings.min_score_threshold or 0)
     except Exception:
-        summary_max_length = 1000
         min_score = 0
 
     # --- Security Check 1: Prompt Injection ---
@@ -214,13 +212,13 @@ def score_resume_text(
 
         data = parse_ai_response(raw)
         result["score"] = int(data.get("score", 0))
-        result["summary"] = _to_str(data.get("summary"))[:summary_max_length]
-        result["skills"] = _to_str(data.get("skills"))[:1000]
-        result["education"] = _to_str(data.get("education"))[:500]
-        result["years_of_experience"] = _to_str(data.get("years_of_experience"))[:50]
-        result["previous_employments"] = _to_str(data.get("previous_employments"))[:2000]
-        result["referees"] = _to_str(data.get("referees"))[:1000]
-        result["other_insights"] = _to_str(data.get("other_insights"))[:1000]
+        result["summary"] = _to_str(data.get("summary"))
+        result["skills"] = _to_str(data.get("skills"))
+        result["education"] = _to_str(data.get("education"))
+        result["years_of_experience"] = _to_str(data.get("years_of_experience"))
+        result["previous_employments"] = _to_str(data.get("previous_employments"))
+        result["referees"] = _to_str(data.get("referees"))
+        result["other_insights"] = _to_str(data.get("other_insights"))
 
         if result["score"] < min_score:
             frappe.log_error(
