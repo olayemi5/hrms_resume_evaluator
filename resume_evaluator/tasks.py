@@ -1,5 +1,5 @@
 import frappe
-from frappe.utils import strip_html
+from frappe.utils import strip_html, get_url
 from resume_evaluator.api.fields import ensure_custom_fields, ensure_settings_doctype
 from resume_evaluator.api.ai_clients import get_ai_client
 from resume_evaluator.api.extractors import get_resume_text
@@ -43,6 +43,12 @@ def process_all_unprocessed():
     if client is None:
         warning("Aborting — AI client not initialized. Check Cv Evaluator Settings.")
         return
+
+    try:
+        settings_name = frappe.db.get_value("Cv Evaluator Settings", {}, "name")
+        min_score = int(frappe.db.get_value("Cv Evaluator Settings", settings_name, "min_score_threshold") or 0)
+    except Exception:
+        min_score = 0
 
     applicants = get_unprocessed_applicants()
     if not applicants:
@@ -101,6 +107,7 @@ def process_all_unprocessed():
             else:
                 info(f"OK {applicant_name} ({full_name}) — score: {score}, flag: {flag}")
 
+            _handle_post_evaluation(applicant_name, full_name, a.get("email_id"), score, min_score)
             processed += 1
 
         except Exception as e:
@@ -115,3 +122,65 @@ def process_all_unprocessed():
         f"── Scheduler run complete ── "
         f"Total: {total} | Processed: {processed} | Skipped: {skipped} | Failed: {failed}"
     )
+
+
+def _handle_post_evaluation(applicant_name, full_name, email, score, min_score):
+    """After evaluation: reject & delete below-threshold applicants, or create portal user."""
+    if not email:
+        return
+
+    if min_score and score < min_score:
+        _reject_and_delete(applicant_name, full_name, email)
+    else:
+        _accept_and_create_user(applicant_name, full_name, email)
+
+
+def _reject_and_delete(applicant_name, full_name, email):
+    """Set status to Rejected, send rejection email, then delete the application."""
+    try:
+        doc = frappe.get_doc("Job Applicant", applicant_name)
+        doc.status = "Rejected"
+        doc.save(ignore_permissions=True)
+        frappe.db.commit()
+
+        frappe.sendmail(
+            recipients=[email],
+            subject="Application Update",
+            message=(
+                f"Dear {full_name or 'Applicant'},<br><br>"
+                f"Thank you for your interest. After careful review, "
+                f"we are unable to proceed with your application at this time.<br><br>"
+                f"We wish you the best in your future endeavours.<br><br>"
+                f"Regards"
+            ),
+        )
+
+        frappe.delete_doc("Job Applicant", applicant_name, ignore_permissions=True, force=True)
+        frappe.db.commit()
+        info(f"REJECTED & DELETED {applicant_name} ({full_name}) — score below threshold")
+
+    except Exception as e:
+        error(f"Failed to reject/delete {applicant_name}: {e}")
+        frappe.log_error(title=f"Reject failed: {applicant_name}"[:140], message=str(e))
+
+
+def _accept_and_create_user(applicant_name, full_name, email):
+    """Send application-received email and create a Website User so they get a set-password link."""
+    if frappe.db.exists("User", email):
+        return
+
+    try:
+        user = frappe.get_doc({
+            "doctype": "User",
+            "email": email,
+            "first_name": full_name or email,
+            "send_welcome_email": 1,
+            "user_type": "Website User",
+        })
+        user.insert(ignore_permissions=True)
+        frappe.db.commit()
+        info(f"PORTAL USER CREATED for {applicant_name} ({full_name}) — welcome email sent")
+
+    except Exception as e:
+        error(f"Failed to create portal user for {applicant_name}: {e}")
+        frappe.log_error(title=f"User creation failed: {applicant_name}"[:140], message=str(e))
