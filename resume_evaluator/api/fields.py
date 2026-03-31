@@ -5,12 +5,13 @@ import frappe
 # ─────────────────────────────────────────────
 
 REQUIRED_CUSTOM_FIELDS = [
-    # ── Evaluation Section ──
+    # ── Evaluation Section (permlevel 1 = internal staff only) ──
     {
         "fieldname": "custom_cv_evaluation_section",
         "label": "CV Evaluation",
         "fieldtype": "Section Break",
         "insert_after": "cover_letter",
+        "permlevel": 1,
     },
     {
         "fieldname": "custom_evaluation_done",
@@ -19,6 +20,7 @@ REQUIRED_CUSTOM_FIELDS = [
         "default": "0",
         "insert_after": "custom_cv_evaluation_section",
         "read_only": 1,
+        "permlevel": 1,
     },
     {
         "fieldname": "custom_match_score",
@@ -26,6 +28,7 @@ REQUIRED_CUSTOM_FIELDS = [
         "fieldtype": "Int",
         "insert_after": "custom_evaluation_done",
         "read_only": 1,
+        "permlevel": 1,
     },
     {
         "fieldname": "custom_match_summary",
@@ -33,6 +36,7 @@ REQUIRED_CUSTOM_FIELDS = [
         "fieldtype": "Small Text",
         "insert_after": "custom_match_score",
         "read_only": 1,
+        "permlevel": 1,
     },
     # ── Security Section ──
     {
@@ -40,6 +44,7 @@ REQUIRED_CUSTOM_FIELDS = [
         "label": "CV Security",
         "fieldtype": "Section Break",
         "insert_after": "custom_match_summary",
+        "permlevel": 1,
     },
     {
         "fieldname": "custom_security_flag",
@@ -48,6 +53,7 @@ REQUIRED_CUSTOM_FIELDS = [
         "options": "\nClean\nInjection Detected\nIdentity Mismatch",
         "insert_after": "custom_cv_security_section",
         "read_only": 1,
+        "permlevel": 1,
     },
     {
         "fieldname": "custom_security_note",
@@ -55,6 +61,7 @@ REQUIRED_CUSTOM_FIELDS = [
         "fieldtype": "Small Text",
         "insert_after": "custom_security_flag",
         "read_only": 1,
+        "permlevel": 1,
     },
     # ── CV Insights Section ──
     {
@@ -62,6 +69,7 @@ REQUIRED_CUSTOM_FIELDS = [
         "label": "CV Insights",
         "fieldtype": "Section Break",
         "insert_after": "custom_security_note",
+        "permlevel": 1,
     },
     {
         "fieldname": "custom_skills",
@@ -69,6 +77,7 @@ REQUIRED_CUSTOM_FIELDS = [
         "fieldtype": "Small Text",
         "insert_after": "custom_cv_insights_section",
         "read_only": 1,
+        "permlevel": 1,
     },
     {
         "fieldname": "custom_education",
@@ -76,6 +85,7 @@ REQUIRED_CUSTOM_FIELDS = [
         "fieldtype": "Small Text",
         "insert_after": "custom_skills",
         "read_only": 1,
+        "permlevel": 1,
     },
     {
         "fieldname": "custom_years_of_experience",
@@ -83,11 +93,13 @@ REQUIRED_CUSTOM_FIELDS = [
         "fieldtype": "Data",
         "insert_after": "custom_education",
         "read_only": 1,
+        "permlevel": 1,
     },
     {
         "fieldname": "custom_cv_column_break",
         "fieldtype": "Column Break",
         "insert_after": "custom_years_of_experience",
+        "permlevel": 1,
     },
     {
         "fieldname": "custom_previous_employments",
@@ -95,6 +107,7 @@ REQUIRED_CUSTOM_FIELDS = [
         "fieldtype": "Text",
         "insert_after": "custom_cv_column_break",
         "read_only": 1,
+        "permlevel": 1,
     },
     {
         "fieldname": "custom_referees",
@@ -102,6 +115,7 @@ REQUIRED_CUSTOM_FIELDS = [
         "fieldtype": "Text",
         "insert_after": "custom_previous_employments",
         "read_only": 1,
+        "permlevel": 1,
     },
     {
         "fieldname": "custom_other_insights",
@@ -109,6 +123,7 @@ REQUIRED_CUSTOM_FIELDS = [
         "fieldtype": "Small Text",
         "insert_after": "custom_referees",
         "read_only": 1,
+        "permlevel": 1,
     },
 ]
 
