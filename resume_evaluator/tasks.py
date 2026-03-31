@@ -4,12 +4,7 @@ from resume_evaluator.api.fields import ensure_custom_fields, ensure_settings_do
 from resume_evaluator.api.ai_clients import get_ai_client
 from resume_evaluator.api.extractors import get_resume_text
 from resume_evaluator.api.score_resume import score_resume_text
-
-LOG_TITLE = "CV Evaluator"
-
-
-def _log():
-    return frappe.logger(LOG_TITLE, allow_site=True)
+from resume_evaluator.api.logger import info, warning, error
 
 
 def get_unprocessed_applicants():
@@ -39,20 +34,19 @@ def update_applicant(applicant_name, result):
 
 def process_all_unprocessed():
     """Scheduled task: evaluate all unevaluated Job Applicant resumes."""
-    log = _log()
-    log.info("── Scheduler run started ──")
+    info("── Scheduler run started ──")
 
     ensure_settings_doctype()
     ensure_custom_fields()
 
     client, provider, model = get_ai_client()
     if client is None:
-        log.warning("Aborting — AI client not initialized. Check Cv Evaluator Settings.")
+        warning("Aborting — AI client not initialized. Check Cv Evaluator Settings.")
         return
 
     applicants = get_unprocessed_applicants()
     if not applicants:
-        log.info("No unevaluated applicants found. Nothing to do.")
+        info("No unevaluated applicants found. Nothing to do.")
         return
 
     total = len(applicants)
@@ -60,7 +54,7 @@ def process_all_unprocessed():
     skipped = 0
     failed = 0
 
-    log.info(f"Found {total} unevaluated applicant(s). Starting processing...")
+    info(f"Found {total} unevaluated applicant(s). Starting processing...")
 
     for a in applicants:
         applicant_name = a["name"]
@@ -68,7 +62,7 @@ def process_all_unprocessed():
         job_opening_name = a.get("job_title")
 
         if not job_opening_name:
-            log.warning(f"SKIP {applicant_name} ({full_name}) — no Job Opening linked.")
+            warning(f"SKIP {applicant_name} ({full_name}) — no Job Opening linked.")
             frappe.log_error(f"No job opening linked for {applicant_name}", "Resume Processing")
             skipped += 1
             continue
@@ -77,19 +71,19 @@ def process_all_unprocessed():
         job_desc = strip_html(raw_desc)
 
         if not job_desc.strip():
-            log.warning(f"SKIP {applicant_name} ({full_name}) — Job Opening '{job_opening_name}' has empty description.")
+            warning(f"SKIP {applicant_name} ({full_name}) — Job Opening '{job_opening_name}' has empty description.")
             skipped += 1
             continue
 
         resume_text = get_resume_text(applicant_name)
         if not resume_text.strip():
-            log.warning(f"SKIP {applicant_name} ({full_name}) — no resume file or text extracted.")
+            warning(f"SKIP {applicant_name} ({full_name}) — no resume file or text extracted.")
             frappe.log_error(f"No resume text found for {applicant_name}", "Resume Processing")
             skipped += 1
             continue
 
         try:
-            log.info(f"Processing {applicant_name} ({full_name}) against '{job_opening_name}'...")
+            info(f"Processing {applicant_name} ({full_name}) against '{job_opening_name}'...")
 
             result = score_resume_text(
                 client, provider, model,
@@ -103,21 +97,21 @@ def process_all_unprocessed():
             score = result.get("score", 0)
 
             if flag != "Clean":
-                log.warning(f"FLAGGED {applicant_name} ({full_name}) — {flag}: {result.get('security_note', '')[:100]}")
+                warning(f"FLAGGED {applicant_name} ({full_name}) — {flag}: {result.get('security_note', '')[:100]}")
             else:
-                log.info(f"OK {applicant_name} ({full_name}) — score: {score}, flag: {flag}")
+                info(f"OK {applicant_name} ({full_name}) — score: {score}, flag: {flag}")
 
             processed += 1
 
         except Exception as e:
             failed += 1
-            log.error(f"FAIL {applicant_name} ({full_name}) — {e}")
+            error(f"FAIL {applicant_name} ({full_name}) — {e}")
             frappe.log_error(
                 title=f"Resume eval failed: {applicant_name}"[:140],
                 message=str(e),
             )
 
-    log.info(
+    info(
         f"── Scheduler run complete ── "
         f"Total: {total} | Processed: {processed} | Skipped: {skipped} | Failed: {failed}"
     )

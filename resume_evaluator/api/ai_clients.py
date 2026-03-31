@@ -1,11 +1,6 @@
 import frappe
 from frappe.utils.password import get_decrypted_password
-
-LOG_TITLE = "CV Evaluator"
-
-
-def _log():
-    return frappe.logger(LOG_TITLE, allow_site=True)
+from resume_evaluator.api.logger import info, warning, error
 
 
 # ─────────────────────────────────────────────
@@ -15,7 +10,7 @@ def _log():
 def get_settings_name():
     name = frappe.db.get_value("Cv Evaluator Settings", {}, "name")
     if not name:
-        _log().warning("No Cv Evaluator Settings record found. Please create one.")
+        warning("No Cv Evaluator Settings record found. Please create one.")
     return name
 
 
@@ -33,7 +28,7 @@ def get_decrypted_key(fieldname):
             return None
         return get_decrypted_password("Cv Evaluator Settings", name, fieldname)
     except Exception as e:
-        _log().error(f"Could not decrypt field '{fieldname}': {e}")
+        error(f"Could not decrypt field '{fieldname}': {e}")
         return None
 
 
@@ -45,7 +40,7 @@ def get_ai_client():
     provider = get_setting("ai_provider")
 
     if not provider:
-        _log().warning("AI provider not set. Configure in Cv Evaluator Settings.")
+        warning("AI provider not set. Configure in Cv Evaluator Settings.")
         return None, None, None
 
     if provider == "OpenAI":
@@ -53,7 +48,7 @@ def get_ai_client():
     elif provider == "Gemini":
         return _get_gemini_client()
     else:
-        _log().error(f"Unknown AI provider: {provider}")
+        error(f"Unknown AI provider: {provider}")
         return None, None, None
 
 
@@ -62,12 +57,12 @@ def _get_openai_client():
 
     api_key = get_decrypted_key("openai_bot_key")
     if not api_key or not api_key.strip():
-        _log().warning("OpenAI API key not set. Configure in Cv Evaluator Settings.")
+        warning("OpenAI API key not set. Configure in Cv Evaluator Settings.")
         return None, None, None
 
     model = get_setting("openai_model") or "gpt-4"
     client = OpenAI(api_key=api_key.strip())
-    _log().info(f"Initialized OpenAI client — model: {model}")
+    info(f"Initialized OpenAI client — model: {model}")
     return client, "OpenAI", model
 
 
@@ -76,11 +71,11 @@ def _get_gemini_client():
 
     api_key = get_decrypted_key("gemini_bot_key")
     if not api_key or not api_key.strip():
-        _log().warning("Gemini API key not set. Configure in Cv Evaluator Settings.")
+        warning("Gemini API key not set. Configure in Cv Evaluator Settings.")
         return None, None, None
 
     model = get_setting("gemini_model") or "gemini-1.5-pro"
     genai.configure(api_key=api_key.strip())
     client = genai.GenerativeModel(model)
-    _log().info(f"Initialized Gemini client — model: {model}")
+    info(f"Initialized Gemini client — model: {model}")
     return client, "Gemini", model
