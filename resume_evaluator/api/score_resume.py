@@ -104,13 +104,24 @@ Resume:
 
 
 def parse_ai_response(content):
+    """Parse JSON from AI response, handling markdown fences and edge cases."""
     content = content.strip()
-    if content.startswith("```"):
-        content = content.split("```")[1]
-        if content.startswith("json"):
-            content = content[4:]
-        content = content.strip()
+    # Extract content between markdown fences if present
+    fence_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", content, re.DOTALL)
+    if fence_match:
+        content = fence_match.group(1).strip()
     return json.loads(content)
+
+
+def _to_str(value):
+    """Coerce AI response value to string — handles lists, dicts, etc."""
+    if value is None:
+        return ""
+    if isinstance(value, list):
+        return "\n".join(str(item) for item in value)
+    if isinstance(value, dict):
+        return "\n".join(f"{k}: {v}" for k, v in value.items())
+    return str(value)
 
 
 # ─────────────────────────────────────────────
@@ -203,13 +214,13 @@ def score_resume_text(
 
         data = parse_ai_response(raw)
         result["score"] = int(data.get("score", 0))
-        result["summary"] = (data.get("summary", "") or "")[:summary_max_length]
-        result["skills"] = (data.get("skills", "") or "")[:1000]
-        result["education"] = (data.get("education", "") or "")[:500]
-        result["years_of_experience"] = (data.get("years_of_experience", "") or "")[:50]
-        result["previous_employments"] = (data.get("previous_employments", "") or "")[:2000]
-        result["referees"] = (data.get("referees", "") or "")[:1000]
-        result["other_insights"] = (data.get("other_insights", "") or "")[:1000]
+        result["summary"] = _to_str(data.get("summary"))[:summary_max_length]
+        result["skills"] = _to_str(data.get("skills"))[:1000]
+        result["education"] = _to_str(data.get("education"))[:500]
+        result["years_of_experience"] = _to_str(data.get("years_of_experience"))[:50]
+        result["previous_employments"] = _to_str(data.get("previous_employments"))[:2000]
+        result["referees"] = _to_str(data.get("referees"))[:1000]
+        result["other_insights"] = _to_str(data.get("other_insights"))[:1000]
 
         if result["score"] < min_score:
             frappe.log_error(
