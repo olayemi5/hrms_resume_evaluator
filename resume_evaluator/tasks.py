@@ -1,5 +1,5 @@
 import frappe
-from frappe.utils import strip_html, get_url
+from frappe.utils import strip_html
 from resume_evaluator.api.fields import ensure_custom_fields, ensure_settings_doctype
 from resume_evaluator.api.ai_clients import get_ai_client
 from resume_evaluator.api.extractors import get_resume_text
@@ -107,7 +107,8 @@ def process_all_unprocessed():
             else:
                 info(f"OK {applicant_name} ({full_name}) — score: {score}, flag: {flag}")
 
-            _handle_post_evaluation(applicant_name, full_name, a.get("email_id"), score, min_score)
+            if flag == "Clean":
+                _handle_post_evaluation(applicant_name, full_name, a.get("email_id"), score, min_score)
             processed += 1
 
         except Exception as e:
@@ -136,13 +137,8 @@ def _handle_post_evaluation(applicant_name, full_name, email, score, min_score):
 
 
 def _reject_and_delete(applicant_name, full_name, email):
-    """Set status to Rejected, send rejection email, then delete the application."""
+    """Send rejection email, then delete the application."""
     try:
-        doc = frappe.get_doc("Job Applicant", applicant_name)
-        doc.status = "Rejected"
-        doc.save(ignore_permissions=True)
-        frappe.db.commit()
-
         frappe.sendmail(
             recipients=[email],
             subject="Application Update",

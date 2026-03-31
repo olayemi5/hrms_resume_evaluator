@@ -169,13 +169,6 @@ def score_resume_text(
     """
     result = dict(DEFAULT_RESULT)
 
-    try:
-        settings_name = frappe.db.get_value("Cv Evaluator Settings", {}, "name")
-        settings = frappe.get_doc("Cv Evaluator Settings", settings_name)
-        min_score = int(settings.min_score_threshold or 0)
-    except Exception:
-        min_score = 0
-
     # --- Security Check 1: Prompt Injection ---
     is_clean, matched = check_for_injection(resume_text)
     if not is_clean:
@@ -219,12 +212,6 @@ def score_resume_text(
         result["previous_employments"] = _to_str(data.get("previous_employments"))
         result["referees"] = _to_str(data.get("referees"))
         result["other_insights"] = _to_str(data.get("other_insights"))
-
-        if result["score"] < min_score:
-            frappe.log_error(
-                title="Low Score Applicant",
-                message=f"{applicant_name}: score {result['score']} < threshold {min_score}",
-            )
 
     except Exception as e:
         result["summary"] = str(e)[:200]
