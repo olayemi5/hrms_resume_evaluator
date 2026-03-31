@@ -18,7 +18,7 @@ def download_file(file_url):
     - External URLs are downloaded to a temp file.
     """
     if file_url.startswith("/"):
-        return Path(frappe.get_site_path()) / file_url.lstrip("/"), False
+        return Path(frappe.get_site_path("public")) / file_url.lstrip("/"), False
 
     r = requests.get(file_url, timeout=30)
     r.raise_for_status()
