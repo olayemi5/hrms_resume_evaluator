@@ -273,16 +273,9 @@ def _accept_applicant(applicant_name, full_name, email, job_title):
         else:
             info(f"Portal user already exists for {email}")
 
-        # Always generate a fresh reset key so the candidate can set their password
-        from frappe.utils import random_string, now_datetime
-        key = random_string(32)
-        frappe.db.set_value("User", email, {
-            "reset_password_key": key,
-            "last_reset_password_key_generated_on": now_datetime(),
-        })
-        frappe.db.commit()
-
-        setup_link = get_url(f"/update-password?key={key}")
+        # Use Frappe's built-in reset_password to generate a properly hashed key
+        user_doc = frappe.get_doc("User", email)
+        setup_link = user_doc.reset_password(send_email=False)
         portal_link = get_url("/my-applications")
 
         settings = _get_settings()
