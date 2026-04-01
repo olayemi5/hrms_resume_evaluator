@@ -131,6 +131,7 @@ REQUIRED_SETTING_FIELDS = [
     "ai_provider", "openai_model", "gemini_model",
     "openai_bot_key", "gemini_bot_key",
     "min_score_threshold", "summary_max_length",
+    "rejection_delay_minutes",
     "rejection_email_template", "acceptance_email_template",
 ]
 
@@ -190,6 +191,13 @@ SETTINGS_DOCTYPE_FIELDS = [
         "fieldtype": "Int",
         "default": "0",
         "description": "Below threshold: auto-rejected with email. At or above: welcome email with portal access.",
+    },
+    {
+        "fieldname": "rejection_delay_minutes",
+        "label": "Rejection Email Delay (minutes)",
+        "fieldtype": "Int",
+        "default": "0",
+        "description": "Delay before sending rejection email. Set to 0 to send immediately. E.g. 1440 = 24 hours.",
     },
     {
         "fieldname": "summary_max_length",

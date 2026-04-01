@@ -35,24 +35,23 @@ application status at:<br>
 """.strip()
 
 
-def _get_email_templates():
-    """Read email templates from Cv Evaluator Settings, falling back to defaults."""
+def _get_settings():
+    """Read all relevant settings from Cv Evaluator Settings."""
     try:
         settings_name = frappe.db.get_value("Cv Evaluator Settings", {}, "name")
-        rejection = frappe.db.get_value(
-            "Cv Evaluator Settings", settings_name, "rejection_email_template"
-        )
-        acceptance = frappe.db.get_value(
-            "Cv Evaluator Settings", settings_name, "acceptance_email_template"
-        )
+        values = frappe.db.get_value(
+            "Cv Evaluator Settings", settings_name,
+            ["rejection_email_template", "acceptance_email_template", "rejection_delay_minutes"],
+            as_dict=True,
+        ) or {}
     except Exception:
-        rejection = None
-        acceptance = None
+        values = {}
 
-    return (
-        rejection or DEFAULT_REJECTION_TEMPLATE,
-        acceptance or DEFAULT_ACCEPTANCE_TEMPLATE,
-    )
+    return {
+        "rejection_template": values.get("rejection_email_template") or DEFAULT_REJECTION_TEMPLATE,
+        "acceptance_template": values.get("acceptance_email_template") or DEFAULT_ACCEPTANCE_TEMPLATE,
+        "rejection_delay_minutes": int(values.get("rejection_delay_minutes") or 0),
+    }
 
 
 def _render_template(template_str, context):
@@ -211,7 +210,7 @@ def _handle_post_evaluation(applicant_name, full_name, email, score, min_score, 
 
 
 def _reject_applicant(applicant_name, full_name, email, job_title):
-    """Send rejection email and update status to Rejected."""
+    """Update status to Rejected and send/schedule rejection email."""
     try:
         doc = frappe.get_doc("Job Applicant", applicant_name)
         doc.status = "Rejected"
@@ -219,17 +218,31 @@ def _reject_applicant(applicant_name, full_name, email, job_title):
         frappe.db.commit()
         info(f"REJECTED {applicant_name} ({full_name}) — status updated to Rejected")
 
-        rejection_template, _ = _get_email_templates()
-        message = _render_template(rejection_template, {
+        settings = _get_settings()
+        message = _render_template(settings["rejection_template"], {
             "applicant_name": full_name,
             "job_title": job_title,
         })
+        subject = f"Application Update — {job_title}"
+        delay = settings["rejection_delay_minutes"]
 
-        _send_email(
-            email, full_name,
-            subject=f"Application Update — {job_title}",
-            message=message,
-        )
+        if delay > 0:
+            from datetime import datetime, timedelta
+            execute_at = datetime.now() + timedelta(minutes=delay)
+            info(f"Scheduling rejection email for {applicant_name} at {execute_at} ({delay} min delay)")
+            frappe.enqueue(
+                "resume_evaluator.tasks.send_delayed_email",
+                queue="short",
+                at_front=False,
+                enqueue_after_commit=True,
+                execute_at=execute_at,
+                recipient=email,
+                recipient_name=full_name,
+                subject=subject,
+                message=message,
+            )
+        else:
+            _send_email(email, full_name, subject=subject, message=message)
 
     except Exception as e:
         error(f"Failed to reject {applicant_name}: {e}")
@@ -270,8 +283,8 @@ def _accept_applicant(applicant_name, full_name, email, job_title):
 
         portal_link = get_url("/my-applications")
 
-        _, acceptance_template = _get_email_templates()
-        message = _render_template(acceptance_template, {
+        settings = _get_settings()
+        message = _render_template(settings["acceptance_template"], {
             "applicant_name": full_name,
             "job_title": job_title,
             "setup_link": setup_link,
@@ -287,6 +300,11 @@ def _accept_applicant(applicant_name, full_name, email, job_title):
     except Exception as e:
         error(f"Failed to accept {applicant_name}: {e}")
         frappe.log_error(title=f"Accept failed: {applicant_name}"[:140], message=str(e))
+
+
+def send_delayed_email(recipient, recipient_name, subject, message):
+    """Background job target for delayed rejection emails."""
+    _send_email(recipient, recipient_name, subject=subject, message=message)
 
 
 def _send_email(recipient, recipient_name, subject, message):
