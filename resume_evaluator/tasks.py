@@ -110,9 +110,11 @@ def process_all_unprocessed():
             else:
                 info(f"OK {applicant_name} ({full_name}) — score: {score}, flag: {flag}")
 
-            # Post-evaluation actions (only for clean evaluations)
-            if flag == "Clean" and email:
-                _handle_post_evaluation(applicant_name, full_name, email, score, min_score, job_opening_name)
+            # Post-evaluation actions
+            if email:
+                _handle_post_evaluation(applicant_name, full_name, email, score, min_score, job_opening_name, flag)
+            else:
+                warning(f"Skipping post-eval for {applicant_name}: no email address")
 
             processed += 1
 
@@ -139,11 +141,17 @@ def _get_job_title(job_opening_name):
     return frappe.db.get_value("Job Opening", job_opening_name, "job_title") or job_opening_name
 
 
-def _handle_post_evaluation(applicant_name, full_name, email, score, min_score, job_opening_name):
-    """Route to reject or accept based on threshold."""
+def _handle_post_evaluation(applicant_name, full_name, email, score, min_score, job_opening_name, flag="Clean"):
+    """Route to reject or accept based on threshold and security flag."""
     job_title = _get_job_title(job_opening_name)
 
-    if min_score and score < min_score:
+    info(f"Post-eval: {applicant_name} score={score}, min_score={min_score}, flag={flag}")
+
+    # Auto-reject if flagged or below threshold
+    if flag != "Clean":
+        info(f"Auto-rejecting {applicant_name} due to security flag: {flag}")
+        _reject_applicant(applicant_name, full_name, email, job_title)
+    elif min_score is not None and min_score > 0 and score < min_score:
         _reject_applicant(applicant_name, full_name, email, job_title)
     else:
         _accept_applicant(applicant_name, full_name, email, job_title)
@@ -152,8 +160,15 @@ def _handle_post_evaluation(applicant_name, full_name, email, score, min_score, 
 def _reject_applicant(applicant_name, full_name, email, job_title):
     """Send rejection email and update status to Rejected."""
     try:
-        frappe.sendmail(
-            recipients=[email],
+        # Update status first so it persists even if email fails
+        doc = frappe.get_doc("Job Applicant", applicant_name)
+        doc.status = "Rejected"
+        doc.save(ignore_permissions=True)
+        frappe.db.commit()
+        info(f"REJECTED {applicant_name} ({full_name}) — status updated to Rejected")
+
+        _send_email(
+            email, full_name,
             subject=f"Application Update — {job_title}",
             message=f"""
                 <p>Dear {full_name or 'Applicant'},</p>
@@ -165,16 +180,7 @@ def _reject_applicant(applicant_name, full_name, email, job_title):
                 We wish you the very best in your career.</p>
                 <p>Kind regards</p>
             """,
-            now=True,
         )
-
-        # Update status to Rejected
-        doc = frappe.get_doc("Job Applicant", applicant_name)
-        doc.status = "Rejected"
-        doc.save(ignore_permissions=True)
-        frappe.db.commit()
-
-        info(f"REJECTED {applicant_name} ({full_name}) — rejection email sent, status updated")
 
     except Exception as e:
         error(f"Failed to reject {applicant_name}: {e}")
@@ -184,11 +190,12 @@ def _reject_applicant(applicant_name, full_name, email, job_title):
 def _accept_applicant(applicant_name, full_name, email, job_title):
     """Send application-received email and create portal user with set-password link."""
     try:
-        # Update status to Replied
+        # Update status first so it persists even if email fails
         doc = frappe.get_doc("Job Applicant", applicant_name)
         doc.status = "Replied"
         doc.save(ignore_permissions=True)
         frappe.db.commit()
+        info(f"ACCEPTED {applicant_name} ({full_name}) — status updated to Replied")
 
         # Create Website User if they don't already have an account
         if not frappe.db.exists("User", email):
@@ -198,13 +205,12 @@ def _accept_applicant(applicant_name, full_name, email, job_title):
                 "first_name": full_name.split()[0] if full_name else email,
                 "last_name": " ".join(full_name.split()[1:]) if full_name and len(full_name.split()) > 1 else "",
                 "user_type": "Website User",
-                "send_welcome_email": 0,  # We send our own custom email below
+                "send_welcome_email": 0,
             })
             user.insert(ignore_permissions=True)
             frappe.db.commit()
             info(f"Portal user created for {email}")
 
-            # Generate password reset link
             from frappe.utils import random_string
             key = random_string(32)
             frappe.db.set_value("User", email, "reset_password_key", key)
@@ -217,8 +223,8 @@ def _accept_applicant(applicant_name, full_name, email, job_title):
 
         portal_link = get_url("/my-applications")
 
-        frappe.sendmail(
-            recipients=[email],
+        _send_email(
+            email, full_name,
             subject=f"Application Received — {job_title}",
             message=f"""
                 <p>Dear {full_name or 'Applicant'},</p>
@@ -234,11 +240,35 @@ def _accept_applicant(applicant_name, full_name, email, job_title):
                 <p>We will be in touch as the review progresses.</p>
                 <p>Kind regards</p>
             """,
-            now=True,
         )
-
-        info(f"ACCEPTED {applicant_name} ({full_name}) — welcome email sent with portal setup link")
 
     except Exception as e:
         error(f"Failed to accept {applicant_name}: {e}")
         frappe.log_error(title=f"Accept failed: {applicant_name}"[:140], message=str(e))
+
+
+def _send_email(recipient, recipient_name, subject, message):
+    """Send email with detailed logging. Falls back to queue if now=True fails."""
+    info(f"Sending email to {recipient}: {subject}")
+    try:
+        frappe.sendmail(
+            recipients=[recipient],
+            subject=subject,
+            message=message,
+            now=True,
+        )
+        info(f"Email sent successfully to {recipient}")
+    except Exception as e:
+        warning(f"Immediate send failed for {recipient}, queuing instead: {e}")
+        try:
+            frappe.sendmail(
+                recipients=[recipient],
+                subject=subject,
+                message=message,
+                now=False,
+            )
+            info(f"Email queued for {recipient}")
+        except Exception as e2:
+            error(f"Email completely failed for {recipient}: {e2}")
+            frappe.log_error(title=f"Email failed: {recipient}"[:140], message=str(e2))
+            raise
