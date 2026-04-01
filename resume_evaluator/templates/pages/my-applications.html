@@ -1,0 +1,39 @@
+{%- extends "templates/web.html" -%}
+
+{%- block page_content -%}
+<h3>My Applications</h3>
+
+{% if applications %}
+<div class="table-responsive mt-4">
+  <table class="table table-bordered">
+    <thead>
+      <tr>
+        <th>Position</th>
+        <th>Status</th>
+        <th>Applied On</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for app in applications %}
+      <tr>
+        <td>{{ app.job_title_label }}</td>
+        <td>
+          <span class="badge
+            {%- if app.status == 'Rejected' %} badge-danger
+            {%- elif app.status == 'Accepted' %} badge-success
+            {%- elif app.status == 'Replied' %} badge-info
+            {%- else %} badge-secondary
+            {%- endif %}">
+            {{ app.status }}
+          </span>
+        </td>
+        <td>{{ frappe.utils.format_date(app.creation) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="mt-4 text-muted">You have no applications yet.</p>
+{% endif %}
+{%- endblock -%}
