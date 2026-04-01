@@ -188,7 +188,7 @@ SETTINGS_DOCTYPE_FIELDS = [
         "label": "Minimum Score Threshold",
         "fieldtype": "Int",
         "default": "0",
-        "description": "Applicants scoring below this will be auto-rejected and deleted",
+        "description": "Below threshold: auto-rejected with email. At or above: welcome email with portal access.",
     },
     {
         "fieldname": "summary_max_length",

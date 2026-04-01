@@ -1,5 +1,5 @@
 import frappe
-from frappe.utils import strip_html
+from frappe.utils import strip_html, get_url
 from resume_evaluator.api.fields import ensure_custom_fields, ensure_settings_doctype
 from resume_evaluator.api.ai_clients import get_ai_client
 from resume_evaluator.api.extractors import get_resume_text
@@ -46,7 +46,9 @@ def process_all_unprocessed():
 
     try:
         settings_name = frappe.db.get_value("Cv Evaluator Settings", {}, "name")
-        min_score = int(frappe.db.get_value("Cv Evaluator Settings", settings_name, "min_score_threshold") or 0)
+        min_score = int(frappe.db.get_value(
+            "Cv Evaluator Settings", settings_name, "min_score_threshold"
+        ) or 0)
     except Exception:
         min_score = 0
 
@@ -65,6 +67,7 @@ def process_all_unprocessed():
     for a in applicants:
         applicant_name = a["name"]
         full_name = a.get("applicant_name") or ""
+        email = a.get("email_id") or ""
         job_opening_name = a.get("job_title")
 
         if not job_opening_name:
@@ -95,7 +98,7 @@ def process_all_unprocessed():
                 client, provider, model,
                 resume_text, job_desc,
                 applicant_name=full_name,
-                applicant_email=a.get("email_id") or "",
+                applicant_email=email,
             )
             update_applicant(applicant_name, result)
 
@@ -107,8 +110,10 @@ def process_all_unprocessed():
             else:
                 info(f"OK {applicant_name} ({full_name}) — score: {score}, flag: {flag}")
 
-            if flag == "Clean":
-                _handle_post_evaluation(applicant_name, full_name, a.get("email_id"), score, min_score)
+            # Post-evaluation actions (only for clean evaluations)
+            if flag == "Clean" and email:
+                _handle_post_evaluation(applicant_name, full_name, email, score, min_score, job_opening_name)
+
             processed += 1
 
         except Exception as e:
@@ -125,58 +130,115 @@ def process_all_unprocessed():
     )
 
 
-def _handle_post_evaluation(applicant_name, full_name, email, score, min_score):
-    """After evaluation: reject & delete below-threshold applicants, or create portal user."""
-    if not email:
-        return
+# ─────────────────────────────────────────────
+# Post-evaluation actions
+# ─────────────────────────────────────────────
+
+def _get_job_title(job_opening_name):
+    """Get the human-readable job title from a Job Opening."""
+    return frappe.db.get_value("Job Opening", job_opening_name, "job_title") or job_opening_name
+
+
+def _handle_post_evaluation(applicant_name, full_name, email, score, min_score, job_opening_name):
+    """Route to reject or accept based on threshold."""
+    job_title = _get_job_title(job_opening_name)
 
     if min_score and score < min_score:
-        _reject_and_delete(applicant_name, full_name, email)
+        _reject_applicant(applicant_name, full_name, email, job_title)
     else:
-        _accept_and_create_user(applicant_name, full_name, email)
+        _accept_applicant(applicant_name, full_name, email, job_title)
 
 
-def _reject_and_delete(applicant_name, full_name, email):
-    """Send rejection email, then delete the application."""
+def _reject_applicant(applicant_name, full_name, email, job_title):
+    """Send rejection email and update status to Rejected."""
     try:
         frappe.sendmail(
             recipients=[email],
-            subject="Application Update",
-            message=(
-                f"Dear {full_name or 'Applicant'},<br><br>"
-                f"Thank you for your interest. After careful review, "
-                f"we are unable to proceed with your application at this time.<br><br>"
-                f"We wish you the best in your future endeavours.<br><br>"
-                f"Regards"
-            ),
+            subject=f"Application Update — {job_title}",
+            message=f"""
+                <p>Dear {full_name or 'Applicant'},</p>
+                <p>Thank you for your interest in the <strong>{job_title}</strong> position
+                and for taking the time to submit your application.</p>
+                <p>After careful review, we regret to inform you that we are unable to
+                proceed with your application at this time.</p>
+                <p>We encourage you to apply for future openings that match your profile.
+                We wish you the very best in your career.</p>
+                <p>Kind regards</p>
+            """,
+            now=True,
         )
 
-        frappe.delete_doc("Job Applicant", applicant_name, ignore_permissions=True, force=True)
+        # Update status to Rejected
+        doc = frappe.get_doc("Job Applicant", applicant_name)
+        doc.status = "Rejected"
+        doc.save(ignore_permissions=True)
         frappe.db.commit()
-        info(f"REJECTED & DELETED {applicant_name} ({full_name}) — score below threshold")
+
+        info(f"REJECTED {applicant_name} ({full_name}) — rejection email sent, status updated")
 
     except Exception as e:
-        error(f"Failed to reject/delete {applicant_name}: {e}")
+        error(f"Failed to reject {applicant_name}: {e}")
         frappe.log_error(title=f"Reject failed: {applicant_name}"[:140], message=str(e))
 
 
-def _accept_and_create_user(applicant_name, full_name, email):
-    """Send application-received email and create a Website User so they get a set-password link."""
-    if frappe.db.exists("User", email):
-        return
-
+def _accept_applicant(applicant_name, full_name, email, job_title):
+    """Send application-received email and create portal user with set-password link."""
     try:
-        user = frappe.get_doc({
-            "doctype": "User",
-            "email": email,
-            "first_name": full_name or email,
-            "send_welcome_email": 1,
-            "user_type": "Website User",
-        })
-        user.insert(ignore_permissions=True)
+        # Update status to Replied
+        doc = frappe.get_doc("Job Applicant", applicant_name)
+        doc.status = "Replied"
+        doc.save(ignore_permissions=True)
         frappe.db.commit()
-        info(f"PORTAL USER CREATED for {applicant_name} ({full_name}) — welcome email sent")
+
+        # Create Website User if they don't already have an account
+        if not frappe.db.exists("User", email):
+            user = frappe.get_doc({
+                "doctype": "User",
+                "email": email,
+                "first_name": full_name.split()[0] if full_name else email,
+                "last_name": " ".join(full_name.split()[1:]) if full_name and len(full_name.split()) > 1 else "",
+                "user_type": "Website User",
+                "send_welcome_email": 0,  # We send our own custom email below
+            })
+            user.insert(ignore_permissions=True)
+            frappe.db.commit()
+            info(f"Portal user created for {email}")
+
+            # Generate password reset link
+            from frappe.utils import random_string
+            key = random_string(32)
+            frappe.db.set_value("User", email, "reset_password_key", key)
+            frappe.db.commit()
+
+            setup_link = get_url(f"/update-password?key={key}")
+        else:
+            setup_link = get_url("/login")
+            info(f"Portal user already exists for {email}")
+
+        portal_link = get_url("/my-applications")
+
+        frappe.sendmail(
+            recipients=[email],
+            subject=f"Application Received — {job_title}",
+            message=f"""
+                <p>Dear {full_name or 'Applicant'},</p>
+                <p>Thank you for applying for the <strong>{job_title}</strong> position.
+                We have received your application and it is currently under review.</p>
+                <p>We have created a portal account for you where you can track the
+                status of your application(s).</p>
+                <p><strong>Set up your account:</strong><br>
+                <a href="{setup_link}">{setup_link}</a></p>
+                <p>Once your password is set, you can log in anytime to check your
+                application status at:<br>
+                <a href="{portal_link}">{portal_link}</a></p>
+                <p>We will be in touch as the review progresses.</p>
+                <p>Kind regards</p>
+            """,
+            now=True,
+        )
+
+        info(f"ACCEPTED {applicant_name} ({full_name}) — welcome email sent with portal setup link")
 
     except Exception as e:
-        error(f"Failed to create portal user for {applicant_name}: {e}")
-        frappe.log_error(title=f"User creation failed: {applicant_name}"[:140], message=str(e))
+        error(f"Failed to accept {applicant_name}: {e}")
+        frappe.log_error(title=f"Accept failed: {applicant_name}"[:140], message=str(e))
