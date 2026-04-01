@@ -14,10 +14,13 @@ from resume_evaluator.api.logger import info, warning, error
 def download_file(file_url):
     """
     Returns a local Path to the file.
-    - Local Frappe files are resolved directly.
+    - /private/files/... → {site}/private/files/...
+    - /files/... → {site}/public/files/...
     - External URLs are downloaded to a temp file.
     """
     if file_url.startswith("/"):
+        if file_url.startswith("/private/"):
+            return Path(frappe.get_site_path()) / file_url.lstrip("/"), False
         return Path(frappe.get_site_path("public")) / file_url.lstrip("/"), False
 
     r = requests.get(file_url, timeout=30)
