@@ -131,6 +131,7 @@ REQUIRED_SETTING_FIELDS = [
     "ai_provider", "openai_model", "gemini_model",
     "openai_bot_key", "gemini_bot_key",
     "min_score_threshold", "summary_max_length",
+    "rejection_email_template", "acceptance_email_template",
 ]
 
 SETTINGS_DOCTYPE_FIELDS = [
@@ -195,6 +196,47 @@ SETTINGS_DOCTYPE_FIELDS = [
         "label": "Summary Max Length (chars)",
         "fieldtype": "Int",
         "default": "1000",
+    },
+    {
+        "fieldname": "section_email_templates",
+        "label": "Email Templates",
+        "fieldtype": "Section Break",
+    },
+    {
+        "fieldname": "rejection_email_template",
+        "label": "Rejection Email Template",
+        "fieldtype": "Text Editor",
+        "description": "Available variables: {{ applicant_name }}, {{ job_title }}",
+        "default": """
+<p>Dear {{ applicant_name or 'Applicant' }},</p>
+<p>Thank you for your interest in the <strong>{{ job_title }}</strong> position
+and for taking the time to submit your application.</p>
+<p>After careful review, we regret to inform you that we are unable to
+proceed with your application at this time.</p>
+<p>We encourage you to apply for future openings that match your profile.
+We wish you the very best in your career.</p>
+<p>Kind regards</p>
+""".strip(),
+    },
+    {
+        "fieldname": "acceptance_email_template",
+        "label": "Acceptance Email Template",
+        "fieldtype": "Text Editor",
+        "description": "Available variables: {{ applicant_name }}, {{ job_title }}, {{ setup_link }}, {{ portal_link }}",
+        "default": """
+<p>Dear {{ applicant_name or 'Applicant' }},</p>
+<p>Thank you for applying for the <strong>{{ job_title }}</strong> position.
+We have received your application and it is currently under review.</p>
+<p>We have created a portal account for you where you can track the
+status of your application(s).</p>
+<p><strong>Set up your account:</strong><br>
+<a href="{{ setup_link }}">{{ setup_link }}</a></p>
+<p>Once your password is set, you can log in anytime to check your
+application status at:<br>
+<a href="{{ portal_link }}">{{ portal_link }}</a></p>
+<p>We will be in touch as the review progresses.</p>
+<p>Kind regards</p>
+""".strip(),
     },
 ]
 

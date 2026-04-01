@@ -1,10 +1,63 @@
 import frappe
 from frappe.utils import strip_html, get_url
+from jinja2 import Template
 from resume_evaluator.api.fields import ensure_custom_fields, ensure_settings_doctype
 from resume_evaluator.api.ai_clients import get_ai_client
 from resume_evaluator.api.extractors import get_resume_text
 from resume_evaluator.api.score_resume import score_resume_text
 from resume_evaluator.api.logger import info, warning, error
+
+
+DEFAULT_REJECTION_TEMPLATE = """
+<p>Dear {{ applicant_name or 'Applicant' }},</p>
+<p>Thank you for your interest in the <strong>{{ job_title }}</strong> position
+and for taking the time to submit your application.</p>
+<p>After careful review, we regret to inform you that we are unable to
+proceed with your application at this time.</p>
+<p>We encourage you to apply for future openings that match your profile.
+We wish you the very best in your career.</p>
+<p>Kind regards</p>
+""".strip()
+
+DEFAULT_ACCEPTANCE_TEMPLATE = """
+<p>Dear {{ applicant_name or 'Applicant' }},</p>
+<p>Thank you for applying for the <strong>{{ job_title }}</strong> position.
+We have received your application and it is currently under review.</p>
+<p>We have created a portal account for you where you can track the
+status of your application(s).</p>
+<p><strong>Set up your account:</strong><br>
+<a href="{{ setup_link }}">{{ setup_link }}</a></p>
+<p>Once your password is set, you can log in anytime to check your
+application status at:<br>
+<a href="{{ portal_link }}">{{ portal_link }}</a></p>
+<p>We will be in touch as the review progresses.</p>
+<p>Kind regards</p>
+""".strip()
+
+
+def _get_email_templates():
+    """Read email templates from Cv Evaluator Settings, falling back to defaults."""
+    try:
+        settings_name = frappe.db.get_value("Cv Evaluator Settings", {}, "name")
+        rejection = frappe.db.get_value(
+            "Cv Evaluator Settings", settings_name, "rejection_email_template"
+        )
+        acceptance = frappe.db.get_value(
+            "Cv Evaluator Settings", settings_name, "acceptance_email_template"
+        )
+    except Exception:
+        rejection = None
+        acceptance = None
+
+    return (
+        rejection or DEFAULT_REJECTION_TEMPLATE,
+        acceptance or DEFAULT_ACCEPTANCE_TEMPLATE,
+    )
+
+
+def _render_template(template_str, context):
+    """Render a Jinja template string with the given context."""
+    return Template(template_str).render(**context)
 
 
 def get_unprocessed_applicants():
@@ -160,26 +213,22 @@ def _handle_post_evaluation(applicant_name, full_name, email, score, min_score, 
 def _reject_applicant(applicant_name, full_name, email, job_title):
     """Send rejection email and update status to Rejected."""
     try:
-        # Update status first so it persists even if email fails
         doc = frappe.get_doc("Job Applicant", applicant_name)
         doc.status = "Rejected"
         doc.save(ignore_permissions=True)
         frappe.db.commit()
         info(f"REJECTED {applicant_name} ({full_name}) — status updated to Rejected")
 
+        rejection_template, _ = _get_email_templates()
+        message = _render_template(rejection_template, {
+            "applicant_name": full_name,
+            "job_title": job_title,
+        })
+
         _send_email(
             email, full_name,
             subject=f"Application Update — {job_title}",
-            message=f"""
-                <p>Dear {full_name or 'Applicant'},</p>
-                <p>Thank you for your interest in the <strong>{job_title}</strong> position
-                and for taking the time to submit your application.</p>
-                <p>After careful review, we regret to inform you that we are unable to
-                proceed with your application at this time.</p>
-                <p>We encourage you to apply for future openings that match your profile.
-                We wish you the very best in your career.</p>
-                <p>Kind regards</p>
-            """,
+            message=message,
         )
 
     except Exception as e:
@@ -190,14 +239,12 @@ def _reject_applicant(applicant_name, full_name, email, job_title):
 def _accept_applicant(applicant_name, full_name, email, job_title):
     """Send application-received email and create portal user with set-password link."""
     try:
-        # Update status first so it persists even if email fails
         doc = frappe.get_doc("Job Applicant", applicant_name)
         doc.status = "Replied"
         doc.save(ignore_permissions=True)
         frappe.db.commit()
         info(f"ACCEPTED {applicant_name} ({full_name}) — status updated to Replied")
 
-        # Create Website User if they don't already have an account
         if not frappe.db.exists("User", email):
             user = frappe.get_doc({
                 "doctype": "User",
@@ -223,23 +270,18 @@ def _accept_applicant(applicant_name, full_name, email, job_title):
 
         portal_link = get_url("/my-applications")
 
+        _, acceptance_template = _get_email_templates()
+        message = _render_template(acceptance_template, {
+            "applicant_name": full_name,
+            "job_title": job_title,
+            "setup_link": setup_link,
+            "portal_link": portal_link,
+        })
+
         _send_email(
             email, full_name,
             subject=f"Application Received — {job_title}",
-            message=f"""
-                <p>Dear {full_name or 'Applicant'},</p>
-                <p>Thank you for applying for the <strong>{job_title}</strong> position.
-                We have received your application and it is currently under review.</p>
-                <p>We have created a portal account for you where you can track the
-                status of your application(s).</p>
-                <p><strong>Set up your account:</strong><br>
-                <a href="{setup_link}">{setup_link}</a></p>
-                <p>Once your password is set, you can log in anytime to check your
-                application status at:<br>
-                <a href="{portal_link}">{portal_link}</a></p>
-                <p>We will be in touch as the review progresses.</p>
-                <p>Kind regards</p>
-            """,
+            message=message,
         )
 
     except Exception as e:
