@@ -250,19 +250,30 @@ application status at:<br>
 
 
 def ensure_custom_fields():
-    """Create any missing custom fields on Job Applicant."""
+    """Create or update custom fields on Job Applicant."""
     for field_def in REQUIRED_CUSTOM_FIELDS:
-        if frappe.db.exists(
+        existing = frappe.db.exists(
             "Custom Field",
             {"dt": "Job Applicant", "fieldname": field_def["fieldname"]},
-        ):
-            continue
-        cf = frappe.get_doc({
-            "doctype": "Custom Field",
-            "dt": "Job Applicant",
-            **field_def,
-        })
-        cf.insert(ignore_permissions=True)
+        )
+        if existing:
+            cf = frappe.get_doc("Custom Field", existing)
+            changed = False
+            for key, val in field_def.items():
+                if key == "fieldname":
+                    continue
+                if getattr(cf, key, None) != val:
+                    setattr(cf, key, val)
+                    changed = True
+            if changed:
+                cf.save(ignore_permissions=True)
+        else:
+            cf = frappe.get_doc({
+                "doctype": "Custom Field",
+                "dt": "Job Applicant",
+                **field_def,
+            })
+            cf.insert(ignore_permissions=True)
     frappe.db.commit()
 
 
