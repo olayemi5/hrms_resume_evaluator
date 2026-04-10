@@ -62,7 +62,7 @@ def _get_openai_client():
 
     model = get_setting("openai_model") or "gpt-4"
     client = OpenAI(api_key=api_key.strip())
-    info(f"Initialized OpenAI client — model: {model}")
+    info(f"Initialized OpenAI client - model: {model}")
     return client, "OpenAI", model
 
 
@@ -77,5 +77,5 @@ def _get_gemini_client():
     model = get_setting("gemini_model") or "gemini-1.5-pro"
     genai.configure(api_key=api_key.strip())
     client = genai.GenerativeModel(model)
-    info(f"Initialized Gemini client — model: {model}")
+    info(f"Initialized Gemini client - model: {model}")
     return client, "Gemini", model

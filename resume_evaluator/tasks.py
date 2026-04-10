@@ -86,14 +86,14 @@ def update_applicant(applicant_name, result):
 
 def process_all_unprocessed():
     """Scheduled task: evaluate all unevaluated Job Applicant resumes."""
-    info("── Scheduler run started ──")
+    info("-- Scheduler run started --")
 
     ensure_settings_doctype()
     ensure_custom_fields()
 
     client, provider, model = get_ai_client()
     if client is None:
-        warning("Aborting — AI client not initialized. Check Cv Evaluator Settings.")
+        warning("Aborting - AI client not initialized. Check Cv Evaluator Settings.")
         return
 
     try:
@@ -123,7 +123,7 @@ def process_all_unprocessed():
         job_opening_name = a.get("job_title")
 
         if not job_opening_name:
-            warning(f"SKIP {applicant_name} ({full_name}) — no Job Opening linked.")
+            warning(f"SKIP {applicant_name} ({full_name}) - no Job Opening linked.")
             frappe.log_error(f"No job opening linked for {applicant_name}", "Resume Processing")
             skipped += 1
             continue
@@ -132,13 +132,13 @@ def process_all_unprocessed():
         job_desc = strip_html(raw_desc)
 
         if not job_desc.strip():
-            warning(f"SKIP {applicant_name} ({full_name}) — Job Opening '{job_opening_name}' has empty description.")
+            warning(f"SKIP {applicant_name} ({full_name}) - Job Opening '{job_opening_name}' has empty description.")
             skipped += 1
             continue
 
         resume_text = get_resume_text(applicant_name)
         if not resume_text.strip():
-            warning(f"SKIP {applicant_name} ({full_name}) — no resume file or text extracted.")
+            warning(f"SKIP {applicant_name} ({full_name}) - no resume file or text extracted.")
             frappe.log_error(f"No resume text found for {applicant_name}", "Resume Processing")
             skipped += 1
             continue
@@ -158,9 +158,9 @@ def process_all_unprocessed():
             score = result.get("score", 0)
 
             if flag != "Clean":
-                warning(f"FLAGGED {applicant_name} ({full_name}) — {flag}: {result.get('security_note', '')[:100]}")
+                warning(f"FLAGGED {applicant_name} ({full_name}) - {flag}: {result.get('security_note', '')[:100]}")
             else:
-                info(f"OK {applicant_name} ({full_name}) — score: {score}, flag: {flag}")
+                info(f"OK {applicant_name} ({full_name}) - score: {score}, flag: {flag}")
 
             # Post-evaluation actions
             if email:
@@ -172,14 +172,14 @@ def process_all_unprocessed():
 
         except Exception as e:
             failed += 1
-            error(f"FAIL {applicant_name} ({full_name}) — {e}")
+            error(f"FAIL {applicant_name} ({full_name}) - {e}")
             frappe.log_error(
                 title=f"Resume eval failed: {applicant_name}"[:140],
                 message=str(e),
             )
 
     info(
-        f"── Scheduler run complete ── "
+        f"-- Scheduler run complete -- "
         f"Total: {total} | Processed: {processed} | Skipped: {skipped} | Failed: {failed}"
     )
 
@@ -216,14 +216,14 @@ def _reject_applicant(applicant_name, full_name, email, job_title):
         doc.status = "Rejected"
         doc.save(ignore_permissions=True)
         frappe.db.commit()
-        info(f"REJECTED {applicant_name} ({full_name}) — status updated to Rejected")
+        info(f"REJECTED {applicant_name} ({full_name}) - status updated to Rejected")
 
         settings = _get_settings()
         message = _render_template(settings["rejection_template"], {
             "applicant_name": full_name,
             "job_title": job_title,
         })
-        subject = f"Application Update — {job_title}"
+        subject = f"Application Update - {job_title}"
         delay = settings["rejection_delay_minutes"]
 
         if delay > 0:
@@ -256,7 +256,7 @@ def _accept_applicant(applicant_name, full_name, email, job_title):
         doc.status = "Replied"
         doc.save(ignore_permissions=True)
         frappe.db.commit()
-        info(f"ACCEPTED {applicant_name} ({full_name}) — status updated to Replied")
+        info(f"ACCEPTED {applicant_name} ({full_name}) - status updated to Replied")
 
         if not frappe.db.exists("User", email):
             user = frappe.get_doc({
@@ -288,7 +288,7 @@ def _accept_applicant(applicant_name, full_name, email, job_title):
 
         _send_email(
             email, full_name,
-            subject=f"Application Received — {job_title}",
+            subject=f"Application Received - {job_title}",
             message=message,
         )
 
