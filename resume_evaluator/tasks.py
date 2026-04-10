@@ -2,6 +2,7 @@ import frappe
 from frappe.utils import strip_html, get_url
 from jinja2 import Template
 from resume_evaluator.api.fields import ensure_custom_fields, ensure_settings_doctype
+from resume_evaluator.install import ensure_permlevel_access
 from resume_evaluator.api.ai_clients import get_ai_client
 from resume_evaluator.api.extractors import get_resume_text
 from resume_evaluator.api.score_resume import score_resume_text
@@ -90,6 +91,7 @@ def process_all_unprocessed():
 
     ensure_settings_doctype()
     ensure_custom_fields()
+    ensure_permlevel_access()
 
     client, provider, model = get_ai_client()
     if client is None:
