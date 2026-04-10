@@ -5,13 +5,14 @@ import frappe
 # ─────────────────────────────────────────────
 
 REQUIRED_CUSTOM_FIELDS = [
-    # ── Evaluation Section (permlevel 1 = internal staff only) ──
+    # -- Evaluation Section (permlevel 1 = internal staff only) --
     {
         "fieldname": "custom_cv_evaluation_section",
         "label": "CV Evaluation",
         "fieldtype": "Section Break",
         "insert_after": "cover_letter",
         "permlevel": 1,
+        "collapsible": 0,
     },
     {
         "fieldname": "custom_evaluation_done",
@@ -38,13 +39,14 @@ REQUIRED_CUSTOM_FIELDS = [
         "read_only": 1,
         "permlevel": 1,
     },
-    # ── Security Section ──
+    # -- Security Section --
     {
         "fieldname": "custom_cv_security_section",
         "label": "CV Security",
         "fieldtype": "Section Break",
         "insert_after": "custom_match_summary",
         "permlevel": 1,
+        "collapsible": 0,
     },
     {
         "fieldname": "custom_security_flag",
@@ -63,13 +65,14 @@ REQUIRED_CUSTOM_FIELDS = [
         "read_only": 1,
         "permlevel": 1,
     },
-    # ── CV Insights Section ──
+    # -- CV Insights Section --
     {
         "fieldname": "custom_cv_insights_section",
         "label": "CV Insights",
         "fieldtype": "Section Break",
         "insert_after": "custom_security_note",
         "permlevel": 1,
+        "collapsible": 0,
     },
     {
         "fieldname": "custom_skills",
@@ -250,19 +253,32 @@ application status at:<br>
 
 
 def ensure_custom_fields():
-    """Create any missing custom fields on Job Applicant."""
+    """Create or update custom fields on Job Applicant."""
     for field_def in REQUIRED_CUSTOM_FIELDS:
-        if frappe.db.exists(
+        fieldname = field_def["fieldname"]
+        existing = frappe.db.exists(
             "Custom Field",
-            {"dt": "Job Applicant", "fieldname": field_def["fieldname"]},
-        ):
-            continue
-        cf = frappe.get_doc({
-            "doctype": "Custom Field",
-            "dt": "Job Applicant",
-            **field_def,
-        })
-        cf.insert(ignore_permissions=True)
+            {"dt": "Job Applicant", "fieldname": fieldname},
+        )
+        if existing:
+            # Update existing field to ensure properties are correct
+            cf = frappe.get_doc("Custom Field", existing)
+            changed = False
+            for key, val in field_def.items():
+                if key == "fieldname":
+                    continue
+                if getattr(cf, key, None) != val:
+                    setattr(cf, key, val)
+                    changed = True
+            if changed:
+                cf.save(ignore_permissions=True)
+        else:
+            cf = frappe.get_doc({
+                "doctype": "Custom Field",
+                "dt": "Job Applicant",
+                **field_def,
+            })
+            cf.insert(ignore_permissions=True)
     frappe.db.commit()
 
 
