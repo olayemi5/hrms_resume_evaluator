@@ -11,34 +11,33 @@ def after_install():
 
 
 def ensure_permlevel_access():
-    """Grant permlevel 1 read on Job Applicant to desk roles via direct SQL.
+    """Grant permlevel 1 read on Job Applicant to desk roles.
 
-    Frappe validation requires permlevel 0 to exist before level 1.
-    Some roles (e.g. HR Manager) may only have level 0 via Custom DocPerm
-    or not at all, so we insert directly to bypass that check.
+    If Custom DocPerm entries exist for Job Applicant, Frappe ignores
+    tabDocPerm entirely, so we must insert into both tables.
     """
+    has_custom = frappe.db.exists("Custom DocPerm", {"parent": "Job Applicant"})
+
     for role in ("HR Manager", "System Manager", "HR User"):
-        has_level_one = frappe.db.sql("""
+        # Insert into tabDocPerm
+        if not frappe.db.sql("""
             SELECT name FROM `tabDocPerm`
             WHERE parent = 'Job Applicant' AND role = %s AND permlevel = 1
-        """, (role,))
-        if has_level_one:
-            continue
+        """, (role,)):
+            frappe.db.sql("""
+                INSERT INTO `tabDocPerm`
+                (name, parent, parenttype, parentfield, role, permlevel, `read`, `write`)
+                VALUES (%s, 'Job Applicant', 'DocType', 'permissions', %s, 1, 1, 0)
+            """, (frappe.generate_hash(length=10), role))
 
-        # Also check Custom DocPerm
-        has_custom_level_one = frappe.db.exists("Custom DocPerm", {
-            "parent": "Job Applicant",
-            "role": role,
-            "permlevel": 1,
-        })
-        if has_custom_level_one:
-            continue
-
-        # Insert directly to avoid Frappe's permlevel 0 validation
-        frappe.db.sql("""
-            INSERT INTO `tabDocPerm`
-            (name, parent, parenttype, parentfield, role, permlevel, `read`, `write`)
-            VALUES (%s, 'Job Applicant', 'DocType', 'permissions', %s, 1, 1, 0)
-        """, (frappe.generate_hash(length=10), role))
+        # If Custom DocPerm is in use, insert there too
+        if has_custom and not frappe.db.exists("Custom DocPerm", {
+            "parent": "Job Applicant", "role": role, "permlevel": 1,
+        }):
+            frappe.db.sql("""
+                INSERT INTO `tabCustom DocPerm`
+                (name, parent, parenttype, parentfield, role, permlevel, `read`, `write`)
+                VALUES (%s, 'Job Applicant', 'DocType', 'permissions', %s, 1, 1, 0)
+            """, (frappe.generate_hash(length=10), role))
 
     frappe.db.commit()
