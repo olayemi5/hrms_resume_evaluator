@@ -34,10 +34,15 @@ def ensure_permlevel_access():
         if has_custom and not frappe.db.exists("Custom DocPerm", {
             "parent": "Job Applicant", "role": role, "permlevel": 1,
         }):
-            frappe.db.sql("""
-                INSERT INTO `tabCustom DocPerm`
-                (name, parent, parenttype, parentfield, role, permlevel, `read`, `write`)
-                VALUES (%s, 'Job Applicant', 'DocType', 'permissions', %s, 1, 1, 0)
-            """, (frappe.generate_hash(length=10), role))
+            frappe.get_doc({
+                "doctype": "Custom DocPerm",
+                "parent": "Job Applicant",
+                "parenttype": "DocType",
+                "parentfield": "permissions",
+                "role": role,
+                "permlevel": 1,
+                "read": 1,
+                "write": 0,
+            }).db_insert()
 
     frappe.db.commit()

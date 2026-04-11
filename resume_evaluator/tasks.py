@@ -69,19 +69,19 @@ def get_unprocessed_applicants():
 
 
 def update_applicant(applicant_name, result):
-    doc = frappe.get_doc("Job Applicant", applicant_name)
-    doc.custom_match_score = result["score"]
-    doc.custom_match_summary = result["summary"]
-    doc.custom_security_flag = result["security_flag"]
-    doc.custom_security_note = result["security_note"]
-    doc.custom_skills = result["skills"]
-    doc.custom_education = result["education"]
-    doc.custom_years_of_experience = result["years_of_experience"]
-    doc.custom_previous_employments = result["previous_employments"]
-    doc.custom_referees = result["referees"]
-    doc.custom_other_insights = result["other_insights"]
-    doc.custom_evaluation_done = 1
-    doc.save(ignore_permissions=True)
+    frappe.db.set_value("Job Applicant", applicant_name, {
+        "custom_match_score": result["score"],
+        "custom_match_summary": result["summary"],
+        "custom_security_flag": result["security_flag"],
+        "custom_security_note": result["security_note"],
+        "custom_skills": result["skills"],
+        "custom_education": result["education"],
+        "custom_years_of_experience": result["years_of_experience"],
+        "custom_previous_employments": result["previous_employments"],
+        "custom_referees": result["referees"],
+        "custom_other_insights": result["other_insights"],
+        "custom_evaluation_done": 1,
+    }, update_modified=False)
     frappe.db.commit()
 
 
@@ -214,9 +214,7 @@ def _handle_post_evaluation(applicant_name, full_name, email, score, min_score, 
 def _reject_applicant(applicant_name, full_name, email, job_title):
     """Update status to Rejected and send/schedule rejection email."""
     try:
-        doc = frappe.get_doc("Job Applicant", applicant_name)
-        doc.status = "Rejected"
-        doc.save(ignore_permissions=True)
+        frappe.db.set_value("Job Applicant", applicant_name, "status", "Rejected", update_modified=False)
         frappe.db.commit()
         info(f"REJECTED {applicant_name} ({full_name}) — status updated to Rejected")
 
@@ -254,9 +252,7 @@ def _reject_applicant(applicant_name, full_name, email, job_title):
 def _accept_applicant(applicant_name, full_name, email, job_title):
     """Send application-received email and create portal user with set-password link."""
     try:
-        doc = frappe.get_doc("Job Applicant", applicant_name)
-        doc.status = "Replied"
-        doc.save(ignore_permissions=True)
+        frappe.db.set_value("Job Applicant", applicant_name, "status", "Replied", update_modified=False)
         frappe.db.commit()
         info(f"ACCEPTED {applicant_name} ({full_name}) — status updated to Replied")
 
