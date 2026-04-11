@@ -11,6 +11,7 @@ def get_context(context):
         filters={"email_id": frappe.session.user},
         fields=["name", "applicant_name", "job_title", "status", "creation"],
         order_by="creation desc",
+        ignore_permissions=True,
     )
 
     for app in context.applications:
