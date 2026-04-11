@@ -341,7 +341,7 @@ def _send_email(recipient, recipient_name, subject, message, applicant_name=None
                 "recipients": recipient,
                 "reference_doctype": "Job Applicant",
                 "reference_name": applicant_name,
-                "email_status": "Sent",
+
             })
             comm.insert(ignore_permissions=True)
             frappe.db.commit()
