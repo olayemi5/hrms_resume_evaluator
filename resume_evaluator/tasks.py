@@ -240,9 +240,10 @@ def _reject_applicant(applicant_name, full_name, email, job_title):
                 recipient_name=full_name,
                 subject=subject,
                 message=message,
+                applicant_name=applicant_name,
             )
         else:
-            _send_email(email, full_name, subject=subject, message=message)
+            _send_email(email, full_name, subject=subject, message=message, applicant_name=applicant_name)
 
     except Exception as e:
         error(f"Failed to reject {applicant_name}: {e}")
@@ -288,6 +289,7 @@ def _accept_applicant(applicant_name, full_name, email, job_title):
             email, full_name,
             subject=f"Application Received — {job_title}",
             message=message,
+            applicant_name=applicant_name,
         )
 
     except Exception as e:
@@ -295,33 +297,53 @@ def _accept_applicant(applicant_name, full_name, email, job_title):
         frappe.log_error(title=f"Accept failed: {applicant_name}"[:140], message=str(e))
 
 
-def send_delayed_email(recipient, recipient_name, subject, message):
+def send_delayed_email(recipient, recipient_name, subject, message, applicant_name=None):
     """Background job target for delayed rejection emails."""
-    _send_email(recipient, recipient_name, subject=subject, message=message)
+    _send_email(recipient, recipient_name, subject=subject, message=message, applicant_name=applicant_name)
 
 
-def _send_email(recipient, recipient_name, subject, message):
-    """Send email with detailed logging. Falls back to queue if now=True fails."""
+def _send_email(recipient, recipient_name, subject, message, applicant_name=None):
+    """Send email and log it to the Job Applicant activity trail."""
     info(f"Sending email to {recipient}: {subject}")
+
+    send_kwargs = {
+        "recipients": [recipient],
+        "subject": subject,
+        "message": message,
+    }
+    if applicant_name:
+        send_kwargs["reference_doctype"] = "Job Applicant"
+        send_kwargs["reference_name"] = applicant_name
+
     try:
-        frappe.sendmail(
-            recipients=[recipient],
-            subject=subject,
-            message=message,
-            now=True,
-        )
+        frappe.sendmail(**send_kwargs, now=True)
         info(f"Email sent successfully to {recipient}")
     except Exception as e:
         warning(f"Immediate send failed for {recipient}, queuing instead: {e}")
         try:
-            frappe.sendmail(
-                recipients=[recipient],
-                subject=subject,
-                message=message,
-                now=False,
-            )
+            frappe.sendmail(**send_kwargs, now=False)
             info(f"Email queued for {recipient}")
         except Exception as e2:
             error(f"Email completely failed for {recipient}: {e2}")
             frappe.log_error(title=f"Email failed: {recipient}"[:140], message=str(e2))
             raise
+
+    if applicant_name:
+        try:
+            comm = frappe.get_doc({
+                "doctype": "Communication",
+                "communication_type": "Communication",
+                "communication_medium": "Email",
+                "sent_or_received": "Sent",
+                "subject": subject,
+                "content": message,
+                "sender": frappe.session.user,
+                "recipients": recipient,
+                "reference_doctype": "Job Applicant",
+                "reference_name": applicant_name,
+                "email_status": "Sent",
+            })
+            comm.insert(ignore_permissions=True)
+            frappe.db.commit()
+        except Exception as e:
+            warning(f"Failed to log communication for {applicant_name}: {e}")
